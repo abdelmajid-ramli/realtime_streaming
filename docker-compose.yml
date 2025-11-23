@@ -1,9 +1,12 @@
 version: '3.8'
 
 services:
-
+  # -----------------------------
+  # PostgreSQL
+  # -----------------------------
   postgres:
     image: postgres:15
+    container_name: postgres
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -16,9 +19,15 @@ services:
       retries: 5
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - airflow-net
 
+  # -----------------------------
+  # Airflow Webserver
+  # -----------------------------
   airflow-webserver:
-    image: apache/airflow:2.8.1
+    build: ./airflow_custom
+    container_name: airflow-webserver
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,13 +41,19 @@ services:
       - "8080:8080"
     command: >
       bash -c "
-      airflow db migrate &&
+      airflow db init &&
       airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com || true &&
       airflow webserver
       "
+    networks:
+      - airflow-net
 
+  # -----------------------------
+  # Airflow Scheduler
+  # -----------------------------
   airflow-scheduler:
-    image: apache/airflow:2.8.1
+    build: ./airflow_custom
+    container_name: airflow-scheduler
     depends_on:
       airflow-webserver:
         condition: service_started
@@ -49,6 +64,67 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
     command: airflow scheduler
+    networks:
+      - airflow-net
 
+  # -----------------------------
+  # Zookeeper (Kafka dependency)
+  # -----------------------------
+  zookeeper_new:
+    image: confluentinc/cp-zookeeper:7.2.1
+    container_name: zookeeper_new
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - airflow-net
+
+  # -----------------------------
+  # Kafka
+  # -----------------------------
+  kafka_new:
+    image: confluentinc/cp-kafka:7.2.1
+    container_name: kafka_new
+    depends_on:
+      - zookeeper_new
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper_new:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka_new:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - airflow-net
+
+  # -----------------------------
+  # Kafka UI
+  # -----------------------------
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: Local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka_new:9092
+    depends_on:
+      - kafka_new
+    networks:
+      - airflow-net
+
+# -----------------------------
+# Volumes
+# -----------------------------
 volumes:
   postgres_data:
+
+# -----------------------------
+# Networks
+# -----------------------------
+networks:
+  airflow-net:
+    driver: bridge
