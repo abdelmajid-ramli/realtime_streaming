@@ -116,6 +116,49 @@ services:
     networks:
       - airflow-net
 
+  spark-master_new:
+    image: bitnami/spark:3.5.1
+    container_name: spark-master_new
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master_new
+      - SPARK_MASTER_PORT=7077  # ← ajoute ça
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+    networks:
+      - airflow-net
+
+  spark-worker_new:
+    image: bitnami/spark:3.5.1
+    container_name: spark-worker_new
+    depends_on:
+      - spark-master_new
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://172.26.0.4:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+    restart: unless-stopped    # ← pour qu’il tente à nouveau
+    networks:
+      - airflow-net
+
+  
+
+  # -----------------------------
+  # Spark Submit
+  # -----------------------------
+  spark-submit_new:
+    image: bitnami/spark:3.5.1
+    container_name: spark-submit_new
+    depends_on:
+      - spark-master_new
+      - kafka_new
+    networks:
+      - airflow-net
+    volumes:
+      - ./spark_jobs:/opt/spark_jobs
+
 # -----------------------------
 # Volumes
 # -----------------------------
