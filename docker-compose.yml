@@ -158,6 +158,30 @@ services:
       - airflow-net
     volumes:
       - ./spark_jobs:/opt/spark_jobs
+    # -----------------------------
+  # Cassandra
+  # -----------------------------
+  cassandra_new:
+    image: cassandra:4.1
+    container_name: cassandra_new
+    environment:
+      CASSANDRA_CLUSTER_NAME: "CassandraCluster"
+      CASSANDRA_DC: "DC1"
+      CASSANDRA_RACK: "RAC1"
+      CASSANDRA_START_RPC: "true"
+      CASSANDRA_PASSWORD_SEEDER: "true"
+      CASSANDRA_USERNAME: cassandra
+      CASSANDRA_PASSWORD: cassandra
+    ports:
+      - "9042:9042"   # CQL
+      - "9160:9160"   # Thrift (si besoin)
+    networks:
+      - airflow-net
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 10s
+      retries: 10
+
 
 # -----------------------------
 # Volumes
